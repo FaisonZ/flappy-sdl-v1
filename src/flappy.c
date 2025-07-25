@@ -202,4 +202,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
+    SDL_DestroyRenderer(renderer);
+    renderer = NULL;
+
+    SDL_DestroyWindow(window);
+    window = NULL;
 }
