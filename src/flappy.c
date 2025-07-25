@@ -70,16 +70,24 @@
 
 #define PLAYER_WIDTH 40.0f
 #define PIPE_WIDTH 60.0f
-#define PIPE_GAP 140.0f
+#define PIPE_GAP 120.0f
 #define PIPE_Y_MIN 140.0f
 #define PIPE_Y_MAX 370.0f
+
+#define GAME_OVER_TIME ((uint64_t) 2000)
+
+static uint64_t gameOverStart = 0;
 
 // Waiting for user to click screen to start
 #define GAME_STATE_START 0
 // In the game loop
 #define GAME_STATE_PLAY 1
+// Game over, buffer time so you see the end of the game before restarting
+#define GAME_STATE_OVER 2
 // Game over, click button to restart
-#define GAME_STATE_END 2
+#define GAME_STATE_END 3
+
+static uint8_t gameState = GAME_STATE_PLAY;
 
 struct PlayerData {
     float x;
@@ -133,6 +141,15 @@ void resetPlayerData()
     playerPos.v = FLAP_VELOCITY;
 }
 
+void resetGame()
+{
+    resetPlayerData();
+    prevTick = SDL_GetTicks();
+    resetPipes();
+    newPipe();
+    gameState = GAME_STATE_PLAY;
+}
+
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("Flappy Bird Project", "1.0.0", "net.faisonz.games.flappy");
@@ -147,10 +164,32 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    resetPlayerData();
-    prevTick = SDL_GetTicks();
-    resetPipes();
-    newPipe();
+    resetGame();
+
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult processEventPlay(SDL_Event *event)
+{
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        if (event->key.key == SDLK_SPACE && isKeyDown == 0) {
+            if (playerPos.y > FLAP_CEILING) {
+                playerPos.v = FLAP_VELOCITY;
+                isKeyDown = 1;
+            }
+        }
+    }
+
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult processEventEnd(SDL_Event *event)
+{
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        if (event->key.key == SDLK_SPACE && isKeyDown == 0) {
+            resetGame();
+        }
+    }
 
     return SDL_APP_CONTINUE;
 }
@@ -159,29 +198,27 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;
-    } else if (event->type == SDL_EVENT_KEY_DOWN) {
-        if (event->key.key == SDLK_SPACE && isKeyDown == 0) {
-            if (playerPos.y > FLAP_CEILING) {
-                playerPos.v = FLAP_VELOCITY;
-                isKeyDown = 1;
-            }
-        }
     } else if (event->type == SDL_EVENT_KEY_UP) {
         if (event->key.key == SDLK_SPACE) {
             isKeyDown = 0;
         }
     }
 
+
+    switch (gameState) {
+        case GAME_STATE_PLAY:
+            return processEventPlay(event);
+            break;
+        case GAME_STATE_END:
+            return processEventEnd(event);
+            break;
+    }
+
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppIterate(void *appstate)
+void tickPlay(float delta, uint64_t now)
 {
-
-    // TICK UPDATE
-    const uint64_t now = SDL_GetTicks();
-    float delta = (float) (now - prevTick);
-
     if (pipes[pipe_current].x <= ((float) WINDOW_WIDTH) * 2.0f / 3.0f) {
         newPipe();
     }
@@ -199,7 +236,42 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         pipes[i].x -= PIPE_VELOCITY / MS_PER_SECOND * delta;
     }
 
+    // Check game over condition
+    if (playerPos.y >= (float) GROUND - 0.25f * PLAYER_WIDTH) {
+        gameState = GAME_STATE_OVER;
+        gameOverStart = now;
+    }
+}
+
+void tickOver(float delta, uint64_t now)
+{
+    if (gameOverStart + GAME_OVER_TIME <= now) {
+        gameState = GAME_STATE_END;
+    }
+}
+
+void tick()
+{
+    // TICK UPDATE
+    const uint64_t now = SDL_GetTicks();
+    float delta = (float) (now - prevTick);
+
+    switch (gameState) {
+        case GAME_STATE_PLAY:
+            tickPlay(delta, now);
+            break;
+        case GAME_STATE_OVER:
+            tickOver(delta, now);
+            break;
+    }
+
     prevTick = now;
+}
+
+SDL_AppResult SDL_AppIterate(void *appstate)
+{
+
+    tick();
 
     // RENDER
     SDL_SetRenderDrawColor(renderer, 0, 153, 219, SDL_ALPHA_OPAQUE);
