@@ -11,8 +11,61 @@
 #define GROUND 440.0f
 #define PLAYER_STARTING_X 160.0f
 #define PLAYER_STARTING_Y 180.0f
-#define FLAP_VELOCITY -700.0f
-#define GRAVITY 2000.0f
+
+/*
+ * # How I determined velocity and gravity
+ *
+ * Looking at videos of flappy bird, the bird barely goes up its height before
+ * starting to fall. And trying to time from flap to returning to its starting
+ * height, it's basically half a second.
+ *
+ * So the bird follows an inverse parabola (-x^2)
+ * If I want the bird to go up its height, 40 px, I add it (-x^2 + 40)
+ * Then to figure out how to have the parabola reach 0 in 0.5 seconds, I needed
+ * to figure out this equation: -n(0.25)^2 + 40 = 0
+ * The answer is this: n = -640
+ * Giving us this: -640x^2 + 40
+ * Then, to shift the inverse parabola so that 0 seconds is a height of 0, and
+ * 0.5 seconds is a height of 0, I subtract 0.25 from x before squaring.
+ * We end up with this: -640(x-0.25)^2 + 40
+ *
+ * But to figure out what acceleration we need to achieve this curve with just
+ * acceleration (gravity) and a starting velocity, we need to do some calculus.
+ *
+ * First, let's clean up the starting equation:
+ * -640(x-0.25)^2 + 40 = y
+ * -640(x^2 - 0.5x + 0.0625) + 40 = y
+ * -640x^2 + 320x -40 + 40 = y
+ * -640x^2 + 320x = y
+ *
+ * When we plug in 0 and 0.5 for x, we still get 0, and 0.25 for x gets us 40
+ *
+ * Now we get the first derivitive, which we'll use to calculate our starting
+ * flap velocity
+ * -640x^2 + 320x = y
+ * 2 * -640x + 320 = y
+ * -1280x + 320 = y
+ *
+ * Plugging in 0, we get a starting velocity of 320 (pixels/second)
+ *
+ * Now we need the second derivitive to reckon the acceleration
+ * -1280x^1 + 320x^0 = y
+ * 1*-1280 + 0*320 = y
+ * -1280 = y
+ *
+ * So that leaves us with an acceleration (gravity) of -1280 (pixels/second^2)
+ *
+ * Finally, since the top of the window is 0 and going down increases y, we
+ * inverse the numbers, giving our final values:
+ *
+ * Flap velocity: -320
+ * Gavity: 1280
+ *
+ * And when I plugged in those numbers and ran the game, it felt right!
+ */
+#define FLAP_VELOCITY -320.0f
+#define GRAVITY 1280.0f
+
 #define PIPE_VELOCITY 100.0f
 
 #define PLAYER_WIDTH 40.0f
@@ -107,16 +160,14 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;
     } else if (event->type == SDL_EVENT_KEY_DOWN) {
-        SDL_KeyboardEvent *e = (SDL_KeyboardEvent*) event;
-        if (e->key == SDLK_SPACE && isKeyDown == 0) {
+        if (event->key.key == SDLK_SPACE && isKeyDown == 0) {
             if (playerPos.y > FLAP_CEILING) {
                 playerPos.v = FLAP_VELOCITY;
                 isKeyDown = 1;
             }
         }
     } else if (event->type == SDL_EVENT_KEY_UP) {
-        SDL_KeyboardEvent *e = (SDL_KeyboardEvent*) event;
-        if (e->key == SDLK_SPACE) {
+        if (event->key.key == SDLK_SPACE) {
             isKeyDown = 0;
         }
     }
