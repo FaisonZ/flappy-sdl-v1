@@ -13,8 +13,11 @@
 #define PLAYER_STARTING_Y 180.0f
 #define FLAP_VELOCITY -700.0f
 #define GRAVITY 2000.0f
+#define PIPE_VELOCITY 100.0f
 
-#define PLAYER_WIDTH 40
+#define PLAYER_WIDTH 40.0
+#define PIPE_WIDTH 60.0
+#define PIPE_GAP 140.0
 
 // Waiting for user to click screen to start
 #define GAME_STATE_START 0
@@ -41,6 +44,32 @@ static struct PlayerData playerPos = {
     .v = FLAP_VELOCITY,
 };
 
+static int pipe_current = 0;
+static int pipe_next = 0;
+static SDL_FPoint pipes[4];
+static uint8_t stop = 0;
+
+void resetPipes()
+{
+    pipe_current = 0;
+    pipe_next = 0;
+    for (int i = 0; i < 4; i++) {
+        pipes[i].x = -3.0f * PIPE_WIDTH;
+    }
+}
+
+void newPipe()
+{
+    pipes[pipe_next].x = WINDOW_WIDTH + PIPE_WIDTH;
+    pipes[pipe_next].y = PLAYER_STARTING_Y;
+
+    pipe_current = pipe_next;
+    pipe_next += 1;
+    if (pipe_next >= 4) {
+        pipe_next = 0;
+    }
+}
+
 void resetPlayerData()
 {
     playerPos.x = PLAYER_STARTING_X;
@@ -64,6 +93,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     resetPlayerData();
     prevTick = SDL_GetTicks();
+    resetPipes();
+    newPipe();
 
     return SDL_APP_CONTINUE;
 }
@@ -92,17 +123,27 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
+
     // TICK UPDATE
     const uint64_t now = SDL_GetTicks();
     float delta = (float) (now - prevTick);
 
-    // Process all ticks
-   playerPos.y += playerPos.v / MS_PER_SECOND * delta;
-   playerPos.v += GRAVITY / MS_PER_SECOND * delta;
+    if (pipes[pipe_current].x <= ((float) WINDOW_WIDTH) * 2.0f / 3.0f) {
+        newPipe();
+    }
 
-   if (playerPos.y > GROUND) {
+    // Update player position
+    playerPos.y += playerPos.v / MS_PER_SECOND * delta;
+    playerPos.v += GRAVITY / MS_PER_SECOND * delta;
+
+    if (playerPos.y > GROUND) {
        playerPos.y = GROUND;
-   }
+    }
+
+    // Update pipe position
+    for (int i = 0; i < 4; i++) {
+        pipes[i].x -= PIPE_VELOCITY / MS_PER_SECOND * delta;
+    }
 
     prevTick = now;
 
@@ -124,6 +165,27 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     SDL_SetRenderDrawColor(renderer, 67, 189, 53, SDL_ALPHA_OPAQUE);
     SDL_RenderFillRect(renderer, &ground);
 
+    // Pipes
+    SDL_SetRenderDrawColor(renderer, 167, 255, 25, SDL_ALPHA_OPAQUE);
+    SDL_FRect pipeRects[8];
+
+    for (int i = 0; i < 4; i++) {
+        int topI = 2 * i;
+        int botI = 2 * i + 1;
+        pipeRects[topI].x = pipes[i].x - PIPE_WIDTH / 2.0f;
+        pipeRects[topI].y = 0;
+        pipeRects[topI].w = PIPE_WIDTH;
+        pipeRects[topI].h = pipes[i].y - PIPE_GAP / 2.0f;
+
+        pipeRects[botI].x = pipeRects[topI].x;
+        pipeRects[botI].y = pipeRects[topI].h + PIPE_GAP;
+        pipeRects[botI].w = PIPE_WIDTH;
+        pipeRects[botI].h = GROUND - pipeRects[botI].y;
+    }
+
+    SDL_RenderFillRects(renderer, pipeRects, 8);
+
+    // Bird
     SDL_FRect player = {
         .x = playerPos.x - PLAYER_WIDTH / 2.0f,
         .y = playerPos.y - PLAYER_WIDTH / 2.0f,
