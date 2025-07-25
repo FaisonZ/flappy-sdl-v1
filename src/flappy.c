@@ -15,9 +15,11 @@
 #define GRAVITY 2000.0f
 #define PIPE_VELOCITY 100.0f
 
-#define PLAYER_WIDTH 40.0
-#define PIPE_WIDTH 60.0
-#define PIPE_GAP 140.0
+#define PLAYER_WIDTH 40.0f
+#define PIPE_WIDTH 60.0f
+#define PIPE_GAP 140.0f
+#define PIPE_Y_MIN 140.0f
+#define PIPE_Y_MAX 370.0f
 
 // Waiting for user to click screen to start
 #define GAME_STATE_START 0
@@ -60,8 +62,9 @@ void resetPipes()
 
 void newPipe()
 {
+    float window = PIPE_Y_MAX - PIPE_Y_MIN;
     pipes[pipe_next].x = WINDOW_WIDTH + PIPE_WIDTH;
-    pipes[pipe_next].y = PLAYER_STARTING_Y;
+    pipes[pipe_next].y = PIPE_Y_MIN + SDL_randf() * window;
 
     pipe_current = pipe_next;
     pipe_next += 1;
