@@ -74,6 +74,9 @@
 #define PIPE_Y_MIN 140.0f
 #define PIPE_Y_MAX 370.0f
 
+#define COLLISION_BUFFER 10.0f
+
+#define COLLISION_PAUSE ((uint64_t) 500)
 #define GAME_OVER_TIME ((uint64_t) 2000)
 
 static uint64_t gameOverStart = 0;
@@ -82,10 +85,12 @@ static uint64_t gameOverStart = 0;
 #define GAME_STATE_START 0
 // In the game loop
 #define GAME_STATE_PLAY 1
+// Game over, Bird falls to the ground
+#define GAME_STATE_FALL 2
 // Game over, buffer time so you see the end of the game before restarting
-#define GAME_STATE_OVER 2
+#define GAME_STATE_OVER 3
 // Game over, click button to restart
-#define GAME_STATE_END 3
+#define GAME_STATE_END 4
 
 static uint8_t gameState = GAME_STATE_PLAY;
 
@@ -111,6 +116,13 @@ static int pipe_current = 0;
 static int pipe_next = 0;
 static SDL_FPoint pipes[4];
 static uint8_t stop = 0;
+
+struct Cardinals {
+    float l;
+    float r;
+    float t;
+    float b;
+};
 
 void resetPipes()
 {
@@ -217,6 +229,14 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     return SDL_APP_CONTINUE;
 }
 
+void checkGroundHit(float now)
+{
+    if (playerPos.y + PLAYER_WIDTH / 2.0f >= GROUND + COLLISION_BUFFER) {
+        gameState = GAME_STATE_OVER;
+        gameOverStart = now;
+    }
+}
+
 void tickPlay(float delta, uint64_t now)
 {
     if (pipes[pipe_current].x <= ((float) WINDOW_WIDTH) * 2.0f / 3.0f) {
@@ -236,11 +256,58 @@ void tickPlay(float delta, uint64_t now)
         pipes[i].x -= PIPE_VELOCITY / MS_PER_SECOND * delta;
     }
 
-    // Check game over condition
-    if (playerPos.y >= (float) GROUND - 0.25f * PLAYER_WIDTH) {
-        gameState = GAME_STATE_OVER;
+    // Check game over conditions
+    // Ground
+    checkGroundHit(now);
+
+    // Pipes
+    const float gapWidthHalf = PIPE_WIDTH / 2.0f - COLLISION_BUFFER;
+    const float gapHeightHalf = PIPE_GAP / 2.0f + COLLISION_BUFFER;
+    const float pWidthHalf = PLAYER_WIDTH / 2.0f;
+    struct Cardinals player = {
+        .l = playerPos.x - pWidthHalf,
+        .r = playerPos.x + pWidthHalf,
+        .t = playerPos.y - pWidthHalf,
+        .b = playerPos.y + pWidthHalf
+    };
+    for (int i = 0; i < 4; i++) {
+        struct Cardinals gap = {
+            .l = pipes[i].x - gapWidthHalf,
+            .r = pipes[i].x + gapWidthHalf,
+            .t = pipes[i].y - gapHeightHalf,
+            .b = pipes[i].y + gapHeightHalf
+        };
+
+        if (player.r < gap.l || player.l > gap.r) {
+            continue;
+        }
+
+        if (player.t > gap.t && player.b < gap.b) {
+            continue;
+        }
+
+        gameState = GAME_STATE_FALL;
         gameOverStart = now;
+        playerPos.v = FLAP_VELOCITY;
     }
+}
+
+void tickFall(float delta, uint64_t now)
+{
+    // Pause a moment before dropping
+    if (now < gameOverStart + COLLISION_PAUSE) {
+        return;
+    }
+
+    // Update player position
+    playerPos.y += playerPos.v / MS_PER_SECOND * delta;
+    playerPos.v += GRAVITY / MS_PER_SECOND * delta;
+
+    if (playerPos.y > GROUND) {
+       playerPos.y = GROUND;
+    }
+
+    checkGroundHit(now);
 }
 
 void tickOver(float delta, uint64_t now)
@@ -259,6 +326,9 @@ void tick()
     switch (gameState) {
         case GAME_STATE_PLAY:
             tickPlay(delta, now);
+            break;
+        case GAME_STATE_FALL:
+            tickFall(delta, now);
             break;
         case GAME_STATE_OVER:
             tickOver(delta, now);
