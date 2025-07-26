@@ -66,7 +66,8 @@
 #define FLAP_VELOCITY -320.0f
 #define GRAVITY 1280.0f
 
-#define PIPE_VELOCITY 150.0f
+// FUTURE IDEA: Make this variant (300 is really fun)
+#define PIPE_VELOCITY 200.0f
 
 #define PLAYER_WIDTH 40.0f
 #define PIPE_WIDTH 60.0f
