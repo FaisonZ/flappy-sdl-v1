@@ -7,6 +7,7 @@ My attempt at cloning flappy bird in SDL3
 ## Goals
 
 * Make as quick as possible, maybe a couple of days
+  * [x] Made with rects and debug text on 7/25
 * Practice a real time game project
   * In contrast to tic-tac-toe, which responds to user events
 * Continue to use the SDL Main Callback feature
