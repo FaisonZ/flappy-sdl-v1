@@ -92,6 +92,12 @@ static uint64_t gameOverStart = 0;
 // Game over, click button to restart
 #define GAME_STATE_END 4
 
+#define SHOW_NONE 0
+#define SHOW_GAME_OVER_TEXT 1
+#define SHOW_FINAL_SCORE_TEXT 2
+#define SHOW_PLAY_AGAIN_TEXT 3
+
+static uint8_t showGameOverTextFlags = SHOW_NONE;
 static uint8_t gameState = GAME_STATE_PLAY;
 
 struct PlayerData {
@@ -114,8 +120,10 @@ static struct PlayerData playerPos = {
 
 static int pipe_current = 0;
 static int pipe_next = 0;
+static int pipe_to_score = 0;
 static SDL_FPoint pipes[4];
 static uint8_t stop = 0;
+static uint32_t score = 0;
 
 struct Cardinals {
     float l;
@@ -128,6 +136,7 @@ void resetPipes()
 {
     pipe_current = 0;
     pipe_next = 0;
+    pipe_to_score = 0;
     for (int i = 0; i < 4; i++) {
         pipes[i].x = -3.0f * PIPE_WIDTH;
     }
@@ -155,11 +164,13 @@ void resetPlayerData()
 
 void resetGame()
 {
+    score = 0;
     resetPlayerData();
     prevTick = SDL_GetTicks();
     resetPipes();
     newPipe();
     gameState = GAME_STATE_PLAY;
+    showGameOverTextFlags = SHOW_NONE;
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -234,13 +245,24 @@ void checkGroundHit(float now)
     if (playerPos.y + PLAYER_WIDTH / 2.0f >= GROUND + COLLISION_BUFFER) {
         gameState = GAME_STATE_OVER;
         gameOverStart = now;
+        showGameOverTextFlags = SHOW_GAME_OVER_TEXT;
     }
 }
 
 void tickPlay(float delta, uint64_t now)
 {
+    // Make new pipe
     if (pipes[pipe_current].x <= ((float) WINDOW_WIDTH) * 2.0f / 3.0f) {
         newPipe();
+    }
+
+    // Score a pipe if in the current pipe
+    if (playerPos.x >= pipes[pipe_to_score].x) {
+        score += 1;
+        pipe_to_score += 1;
+        if (pipe_to_score >= 4) {
+            pipe_to_score = 0;
+        }
     }
 
     // Update player position
@@ -314,6 +336,9 @@ void tickOver(float delta, uint64_t now)
 {
     if (gameOverStart + GAME_OVER_TIME <= now) {
         gameState = GAME_STATE_END;
+        showGameOverTextFlags = SHOW_PLAY_AGAIN_TEXT;
+    } else if (gameOverStart + 1000.0f <= now && showGameOverTextFlags < SHOW_FINAL_SCORE_TEXT) {
+        showGameOverTextFlags = SHOW_FINAL_SCORE_TEXT;
     }
 }
 
@@ -391,6 +416,40 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
     SDL_SetRenderDrawColor(renderer, 254, 231, 97, SDL_ALPHA_OPAQUE);
     SDL_RenderFillRect(renderer, &player);
+
+    // Render score
+    const float charsize = (float) SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
+    const float digits = score > 0 ? SDL_floorf(SDL_log10f(score)) + 1 : 1;
+    SDL_SetRenderScale(renderer, 3.0f, 3.0f);
+    SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
+    SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - digits * charsize) / 2.0f+0.5f, charsize * 0.5f, "%" SDL_PRIu32, score);
+    SDL_SetRenderDrawColor(renderer, 28, 22, 45, SDL_ALPHA_OPAQUE);
+    SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - digits * charsize) / 2.0f, charsize * 0.5f, "%" SDL_PRIu32, score);
+
+    // Render game over text
+    if (showGameOverTextFlags >= SHOW_GAME_OVER_TEXT) {
+        SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 10 * charsize) / 2.0f+0.5f, 10 * charsize * 0.5f, "Game Over!");
+        SDL_SetRenderDrawColor(renderer, 28, 22, 45, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 10 * charsize) / 2.0f, 10 * charsize * 0.5f, "Game Over!");
+    }
+    // Render final score text
+    if (showGameOverTextFlags >= SHOW_FINAL_SCORE_TEXT) {
+        SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (13 + digits) * charsize) / 2.0f+0.5f, 13 * charsize * 0.5f, "Final Score: %" SDL_PRIu32, score);
+        SDL_SetRenderDrawColor(renderer, 28, 22, 45, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (13 + digits) * charsize) / 2.0f, 13 * charsize * 0.5f, "Final Score: %" SDL_PRIu32, score);
+    }
+
+    // Render play again text
+    if (showGameOverTextFlags >= SHOW_PLAY_AGAIN_TEXT) {
+        SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 21 * charsize) / 2.0f+0.5f, 21 * charsize * 0.5f, "<space> to Play Again");
+        SDL_SetRenderDrawColor(renderer, 28, 22, 45, SDL_ALPHA_OPAQUE);
+        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 21 * charsize) / 2.0f, 21 * charsize * 0.5f, "<space> to Play Again");
+    }
+
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 
     SDL_RenderPresent(renderer);
     return SDL_APP_CONTINUE;
