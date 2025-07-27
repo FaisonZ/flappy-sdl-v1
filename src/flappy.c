@@ -5,12 +5,12 @@
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
 
-#define MS_PER_SECOND 1000.0f
-
 #define FLAP_CEILING 70.0f
 #define GROUND 440.0f
 #define PLAYER_STARTING_X 160.0f
 #define PLAYER_STARTING_Y 180.0f
+
+#define FIXED_TICK_RATE 16
 
 /*
  * # How I determined velocity and gravity
@@ -112,6 +112,7 @@ static SDL_Renderer *renderer;
 
 static uint8_t isKeyDown = 0;
 static uint64_t prevTick = 0;
+static uint64_t msAcc = 0;
 
 static struct PlayerData playerPos = {
     .x = PLAYER_STARTING_X,
@@ -123,7 +124,6 @@ static int pipe_current = 0;
 static int pipe_next = 0;
 static int pipe_to_score = 0;
 static SDL_FPoint pipes[4];
-static uint8_t stop = 0;
 static uint32_t score = 0;
 
 struct Cardinals {
@@ -267,8 +267,8 @@ void tickPlay(float delta, uint64_t now)
     }
 
     // Update player position
-    playerPos.y += playerPos.v / MS_PER_SECOND * delta;
-    playerPos.v += GRAVITY / MS_PER_SECOND * delta;
+    playerPos.y += playerPos.v / SDL_MS_PER_SECOND * delta;
+    playerPos.v += GRAVITY / SDL_MS_PER_SECOND * delta;
 
     if (playerPos.y > GROUND) {
        playerPos.y = GROUND;
@@ -276,7 +276,7 @@ void tickPlay(float delta, uint64_t now)
 
     // Update pipe position
     for (int i = 0; i < 4; i++) {
-        pipes[i].x -= PIPE_VELOCITY / MS_PER_SECOND * delta;
+        pipes[i].x -= PIPE_VELOCITY / SDL_MS_PER_SECOND * delta;
     }
 
     // Check game over conditions
@@ -323,8 +323,8 @@ void tickFall(float delta, uint64_t now)
     }
 
     // Update player position
-    playerPos.y += playerPos.v / MS_PER_SECOND * delta;
-    playerPos.v += GRAVITY / MS_PER_SECOND * delta;
+    playerPos.y += playerPos.v / SDL_MS_PER_SECOND * delta;
+    playerPos.v += GRAVITY / SDL_MS_PER_SECOND * delta;
 
     if (playerPos.y > GROUND) {
        playerPos.y = GROUND;
@@ -347,18 +347,22 @@ void tick()
 {
     // TICK UPDATE
     const uint64_t now = SDL_GetTicks();
-    float delta = (float) (now - prevTick);
+    msAcc += now - prevTick;
 
-    switch (gameState) {
-        case GAME_STATE_PLAY:
-            tickPlay(delta, now);
-            break;
-        case GAME_STATE_FALL:
-            tickFall(delta, now);
-            break;
-        case GAME_STATE_OVER:
-            tickOver(delta, now);
-            break;
+    while (msAcc >= FIXED_TICK_RATE) {
+        switch (gameState) {
+            case GAME_STATE_PLAY:
+                tickPlay(FIXED_TICK_RATE, now);
+                break;
+            case GAME_STATE_FALL:
+                tickFall(FIXED_TICK_RATE, now);
+                break;
+            case GAME_STATE_OVER:
+                tickOver(FIXED_TICK_RATE, now);
+                break;
+        }
+
+        msAcc -= FIXED_TICK_RATE;
     }
 
     prevTick = now;
@@ -366,7 +370,6 @@ void tick()
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-
     tick();
 
     // RENDER
