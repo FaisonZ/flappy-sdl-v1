@@ -1,1 +1,1 @@
-gcc src/flappy.c -o build/flappy/bin/flappy `pkg-config --cflags --libs sdl3` -Wl,-rpath='$ORIGIN/../lib' -g -Wall
+gcc src/flappy.c -o build/flappy/flappy `pkg-config --cflags --libs sdl3 --libs sdl3-image` -Wl,-rpath='$ORIGIN/lib' -g -Wall

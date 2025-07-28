@@ -1,6 +1,7 @@
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3_image/SDL_image.h>
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -126,6 +127,8 @@ static int pipe_to_score = 0;
 static SDL_FPoint pipes[4];
 static uint32_t score = 0;
 
+static SDL_Texture* birdTexture;
+
 struct Cardinals {
     float l;
     float r;
@@ -174,6 +177,42 @@ void resetGame()
     showGameOverTextFlags = SHOW_NONE;
 }
 
+SDL_EnumerationResult enum_callback(void *userdata, const char* dirname, const char* fname)
+{
+    SDL_Log("%s %s", dirname, fname);
+    return SDL_ENUM_CONTINUE;
+}
+
+uint8_t loadImages()
+{
+    SDL_Storage *titleStorage = SDL_OpenTitleStorage(NULL, 0);
+    if (titleStorage == NULL) {
+
+        return 0;
+    }
+
+    while (!SDL_StorageReady(titleStorage)) {
+        SDL_Delay(1);
+    }
+
+    void* img;
+    Uint64 imgLen = 0;
+
+    if (SDL_GetStorageFileSize(titleStorage, "assets/bird-base.png", &imgLen) && imgLen > 0) {
+        img = SDL_malloc(imgLen);
+        if (!SDL_ReadStorageFile(titleStorage, "assets/bird-base.png", img, imgLen)) {
+            return 0;
+        }
+        SDL_IOStream *imgStrm = SDL_IOFromMem(img, imgLen);
+
+        birdTexture = IMG_LoadTexture_IO(renderer, imgStrm, true);
+        imgStrm = NULL;
+        img = NULL;
+    }
+
+    return 1;
+}
+
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("Flappy Bird Project", "1.0.0", "net.faisonz.games.flappy");
@@ -185,6 +224,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     if (!SDL_CreateWindowAndRenderer("Flappy Bird", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer)) {
         SDL_Log("Failed to create window/renderer: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+    if (loadImages() == 0) {
+        SDL_Log("Failed to load images: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
@@ -412,14 +456,22 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
     // Bird
     SDL_FRect player = {
+        .x = playerPos.x - birdTexture->w / 2.0f,
+        .y = playerPos.y - birdTexture->h / 2.0f,
+        .w = birdTexture->w,
+        .h = birdTexture->h,
+    };
+
+    SDL_FRect playerOutline = {
         .x = playerPos.x - PLAYER_WIDTH / 2.0f,
         .y = playerPos.y - PLAYER_WIDTH / 2.0f,
         .w = PLAYER_WIDTH,
         .h = PLAYER_WIDTH,
     };
 
+    SDL_RenderTexture(renderer, birdTexture, NULL, &player);
     SDL_SetRenderDrawColor(renderer, 254, 231, 97, SDL_ALPHA_OPAQUE);
-    SDL_RenderFillRect(renderer, &player);
+    SDL_RenderRect(renderer, &playerOutline);
 
     // Render score
     const float charsize = (float) SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
@@ -461,6 +513,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
+    SDL_DestroyTexture(birdTexture);
+    birdTexture = NULL;
     SDL_DestroyRenderer(renderer);
     renderer = NULL;
 
