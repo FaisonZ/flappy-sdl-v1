@@ -126,6 +126,7 @@ static int pipe_next = 0;
 static int pipe_to_score = 0;
 static SDL_FPoint pipes[4];
 static uint32_t score = 0;
+static Uint32 highScore = 0;
 
 static SDL_Texture* birdTexture;
 
@@ -210,6 +211,57 @@ uint8_t loadImages()
         img = NULL;
     }
 
+    SDL_CloseStorage(titleStorage);
+    titleStorage = NULL;
+
+    return 1;
+}
+
+Uint8 createFileIfNotThere(SDL_Storage* st, char* fn)
+{
+    struct SDL_PathInfo pi;
+    if (!SDL_GetStoragePathInfo(st, fn, &pi)) {
+        char i[1] = "0";
+        if (!SDL_WriteStorageFile(st, fn, &i, 1)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+Uint8 loadHighScore()
+{
+    SDL_Storage *userStorage = SDL_OpenUserStorage("faisonz", "flappy-bird", 0);
+    if (userStorage == NULL) {
+
+        return 0;
+    }
+
+    while (!SDL_StorageReady(userStorage)) {
+        SDL_Delay(1);
+    }
+
+    if (createFileIfNotThere(userStorage, "highscore.txt") == 0) {
+        return 0;
+    }
+
+    void* hs;
+    Uint64 hsLen = 0;
+
+    if (SDL_GetStorageFileSize(userStorage, "highscore.txt", &hsLen) && hsLen > 0) {
+        char* hsString = SDL_malloc(hsLen+1);
+
+        if (!SDL_ReadStorageFile(userStorage, "highscore.txt", hsString, hsLen)) {
+            return 0;
+        }
+
+        highScore = (Uint32) SDL_atoi(hsString);
+    }
+
+    SDL_CloseStorage(userStorage);
+    userStorage = NULL;
+
     return 1;
 }
 
@@ -224,6 +276,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     if (!SDL_CreateWindowAndRenderer("Flappy Bird", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer)) {
         SDL_Log("Failed to create window/renderer: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+    if (loadHighScore() == 0) {
+        SDL_Log("Failed to load high score: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
