@@ -266,6 +266,8 @@ Uint8 saveHighScore()
         return 1;
     }
 
+    highScore = score;
+
     SDL_Storage *userStorage = SDL_OpenUserStorage("faisonz", "flappy-bird", 0);
     if (userStorage == NULL) {
         return 0;
@@ -282,6 +284,10 @@ Uint8 saveHighScore()
     if (!SDL_WriteStorageFile(userStorage, "highscore.txt", hs, digits)) {
         return 0;
     }
+
+    SDL_free(hs);
+    SDL_CloseStorage(userStorage);
+    userStorage = NULL;
 
     return 1;
 }
@@ -457,19 +463,16 @@ void tickFall(float delta, uint64_t now)
 
 void tickOver(float delta, uint64_t now)
 {
+    if (recordScore == 0) {
+        saveHighScore();
+        recordScore = 1;
+    }
+
     if (gameOverStart + GAME_OVER_TIME <= now) {
         gameState = GAME_STATE_END;
         showGameOverTextFlags = SHOW_PLAY_AGAIN_TEXT;
     } else if (gameOverStart + 1000.0f <= now && showGameOverTextFlags < SHOW_FINAL_SCORE_TEXT) {
         showGameOverTextFlags = SHOW_FINAL_SCORE_TEXT;
-    }
-}
-
-void tickEnd(float delta, uint64_t now)
-{
-    if (recordScore == 0) {
-        saveHighScore();
-        recordScore = 1;
     }
 }
 
@@ -489,9 +492,6 @@ void tick()
                 break;
             case GAME_STATE_OVER:
                 tickOver(FIXED_TICK_RATE, now);
-                break;
-            case GAME_STATE_END:
-                tickEnd(FIXED_TICK_RATE, now);
                 break;
         }
 
@@ -565,6 +565,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // Render score
     const float charsize = (float) SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
     const float digits = score > 0 ? SDL_floorf(SDL_log10f(score)) + 1 : 1;
+    const float hsDigits = highScore > 0 ? SDL_floorf(SDL_log10f(highScore)) + 1 : 1;
     SDL_SetRenderScale(renderer, 3.0f, 3.0f);
     SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
     SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - digits * charsize) / 2.0f+0.5f, charsize * 0.5f, "%" SDL_PRIu32, score);
@@ -574,16 +575,18 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // Render game over text
     if (showGameOverTextFlags >= SHOW_GAME_OVER_TEXT) {
         SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
-        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 10 * charsize) / 2.0f+0.5f, 10 * charsize * 0.5f, "Game Over!");
+        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 10 * charsize) / 2.0f+0.5f, 6 * charsize * 0.5f, "Game Over!");
         SDL_SetRenderDrawColor(renderer, 28, 22, 45, SDL_ALPHA_OPAQUE);
-        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 10 * charsize) / 2.0f, 10 * charsize * 0.5f, "Game Over!");
+        SDL_RenderDebugText(renderer, (WINDOW_WIDTH / 3.0f - 10 * charsize) / 2.0f, 6 * charsize * 0.5f, "Game Over!");
     }
     // Render final score text
     if (showGameOverTextFlags >= SHOW_FINAL_SCORE_TEXT) {
         SDL_SetRenderDrawColor(renderer, 255, 238, 229, SDL_ALPHA_OPAQUE);
-        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (13 + digits) * charsize) / 2.0f+0.5f, 13 * charsize * 0.5f, "Final Score: %" SDL_PRIu32, score);
+        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (13 + digits) * charsize) / 2.0f+0.5f, 9 * charsize * 0.5f, "Final Score: %" SDL_PRIu32, score);
+        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (12 + hsDigits) * charsize) / 2.0f+0.5f, 12 * charsize * 0.5f, "High Score: %" SDL_PRIu32, highScore);
         SDL_SetRenderDrawColor(renderer, 28, 22, 45, SDL_ALPHA_OPAQUE);
-        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (13 + digits) * charsize) / 2.0f, 13 * charsize * 0.5f, "Final Score: %" SDL_PRIu32, score);
+        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (13 + digits) * charsize) / 2.0f, 9 * charsize * 0.5f, "Final Score: %" SDL_PRIu32, score);
+        SDL_RenderDebugTextFormat(renderer, (WINDOW_WIDTH / 3.0f - (12 + hsDigits) * charsize) / 2.0f, 12 * charsize * 0.5f, "High Score: %" SDL_PRIu32, highScore);
     }
 
     // Render play again text
