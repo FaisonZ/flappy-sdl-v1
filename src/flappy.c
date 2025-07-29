@@ -125,8 +125,9 @@ static int pipe_current = 0;
 static int pipe_next = 0;
 static int pipe_to_score = 0;
 static SDL_FPoint pipes[4];
-static uint32_t score = 0;
+static Uint32 score = 0;
 static Uint32 highScore = 0;
+static Uint8 recordScore = 0;
 
 static SDL_Texture* birdTexture;
 
@@ -170,18 +171,13 @@ void resetPlayerData()
 void resetGame()
 {
     score = 0;
+    recordScore = 0;
     resetPlayerData();
     prevTick = SDL_GetTicks();
     resetPipes();
     newPipe();
     gameState = GAME_STATE_PLAY;
     showGameOverTextFlags = SHOW_NONE;
-}
-
-SDL_EnumerationResult enum_callback(void *userdata, const char* dirname, const char* fname)
-{
-    SDL_Log("%s %s", dirname, fname);
-    return SDL_ENUM_CONTINUE;
 }
 
 uint8_t loadImages()
@@ -246,7 +242,6 @@ Uint8 loadHighScore()
         return 0;
     }
 
-    void* hs;
     Uint64 hsLen = 0;
 
     if (SDL_GetStorageFileSize(userStorage, "highscore.txt", &hsLen) && hsLen > 0) {
@@ -261,6 +256,32 @@ Uint8 loadHighScore()
 
     SDL_CloseStorage(userStorage);
     userStorage = NULL;
+
+    return 1;
+}
+
+Uint8 saveHighScore()
+{
+    if (score < highScore) {
+        return 1;
+    }
+
+    SDL_Storage *userStorage = SDL_OpenUserStorage("faisonz", "flappy-bird", 0);
+    if (userStorage == NULL) {
+        return 0;
+    }
+
+    while (!SDL_StorageReady(userStorage)) {
+        SDL_Delay(1);
+    }
+
+    int digits = SDL_floorf(SDL_log10f(score)) + 1;
+    char* hs = SDL_malloc(digits + 1);
+    SDL_snprintf(hs, digits + 1, "%u", score);
+
+    if (!SDL_WriteStorageFile(userStorage, "highscore.txt", hs, digits)) {
+        return 0;
+    }
 
     return 1;
 }
@@ -444,6 +465,14 @@ void tickOver(float delta, uint64_t now)
     }
 }
 
+void tickEnd(float delta, uint64_t now)
+{
+    if (recordScore == 0) {
+        saveHighScore();
+        recordScore = 1;
+    }
+}
+
 void tick()
 {
     // TICK UPDATE
@@ -460,6 +489,9 @@ void tick()
                 break;
             case GAME_STATE_OVER:
                 tickOver(FIXED_TICK_RATE, now);
+                break;
+            case GAME_STATE_END:
+                tickEnd(FIXED_TICK_RATE, now);
                 break;
         }
 
