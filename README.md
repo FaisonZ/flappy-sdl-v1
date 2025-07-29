@@ -15,7 +15,7 @@ My attempt at cloning flappy bird in SDL3
     to see the performance differences
 * [x] Use sprites instead of rendering rectangles
   * I'll develop with rectangles first, then add sprites on top of it
-* STRETCH GOAL: Save high scores in a file
+* [x] STRETCH GOAL: Save high scores in a file
 
 ## Build
 
