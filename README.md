@@ -1,6 +1,6 @@
 # Flappy Bird Project
 
-**Status**: Begun
+**Status**: Completed!
 
 My attempt at cloning flappy bird in SDL3
 
